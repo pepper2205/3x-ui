@@ -282,6 +282,9 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 	case "status":
 		onlyMessage = true
 		msg += t.I18nBot("tgbot.commands.status")
+	case "myconfig": //my-function_bot
+    		onlyMessage = true
+    		msg += t.getClientConfig(chatId, message.From.ID)
 	case "id":
 		onlyMessage = true
 		msg += t.I18nBot("tgbot.commands.getID", "ID=="+strconv.FormatInt(message.From.ID, 10))
@@ -334,7 +337,54 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 		t.sendResponse(chatId, msg, onlyMessage, isAdmin)
 	}
 }
+//func_my_from_deepseek
+func (t *Tgbot) getClientConfig(chatId int64, tgUserId int64) string {
+    traffics, err := t.inboundService.GetClientTrafficTgBot(tgUserId)
+    if err != nil || len(traffics) == 0 {
+        return t.I18nBot("tgbot.errors.noConfig")
+    }
 
+    var configs []string
+    for _, traffic := range traffics {
+        inbound, err := t.inboundService.GetInbound(traffic.InboundId)
+        if err != nil {
+            continue
+        }
+
+        // Форматируем конфиг для пользователя
+        config := fmt.Sprintf(
+            "🔧 **%s**\n- Протокол: `%s`\n- Порт: `%d`\n- UUID: `%s`\n- Ссылка: `%s`",
+            inbound.Remark,
+            inbound.Protocol,
+            inbound.Port,
+            traffic.Email, // Используем email как идентификатор
+            t.generateV2rayLink(inbound, traffic),
+        )
+        configs = append(configs, config)
+    }
+
+    if len(configs) == 0 {
+        return t.I18nBot("tgbot.errors.noActiveConfig")
+    }
+
+    return strings.Join(configs, "\n\n")
+}
+// Вспомогательная функция для генерации ссылки:
+func (t *Tgbot) generateV2rayLink(inbound *model.Inbound, traffic *xray.ClientTraffic) string {
+    switch inbound.Protocol {
+    case "vless":
+        return fmt.Sprintf("vless://%s@%s:%d?type=tcp&security=none#%s",
+            traffic.Email,
+            hostname,
+            inbound.Port,
+            url.QueryEscape(inbound.Remark),
+        )
+    case "vmess":
+        // Реализуйте генерацию VMESS ссылки
+    default:
+        return ""
+    }
+}
 // Helper function to send the message based on onlyMessage flag.
 func (t *Tgbot) sendResponse(chatId int64, msg string, onlyMessage, isAdmin bool) {
 	if onlyMessage {
